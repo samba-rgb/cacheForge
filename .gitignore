@@ -1,0 +1,15 @@
+# Ignore target directories
+/cache_demo/target/
+/cacheForge/target/
+/memory_bix/target/
+
+# Ignore lock files
+/cache_demo/Cargo.lock
+/cacheForge/Cargo.lock
+/memory_bix/Cargo.lock
+
+# Other common files to ignore
+*.log
+*.tmp
+*.bak
+*.swp
