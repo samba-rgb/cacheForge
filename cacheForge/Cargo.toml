@@ -2,6 +2,10 @@
 name = "cacheForge"
 version = "0.1.0"
 edition = "2021"
+authors = ["Samba Kolliboina"]
+license = "MIT"
+description = "A Cache library for rust applications"
+
 
 [dependencies]
 memory_box = { path = "../memory_box" }

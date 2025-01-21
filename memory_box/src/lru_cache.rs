@@ -1,12 +1,11 @@
 use std::collections::HashMap;
-use std::cell::RefCell;
-use std::rc::Rc;
+use std::sync::{Arc, Mutex};
 
 /// LRU Cache Implementation
 pub struct LruCache<K, V> {
-    map: HashMap<K, Rc<RefCell<Node<K, V>>>>,
-    head: Option<Rc<RefCell<Node<K, V>>>>,
-    tail: Option<Rc<RefCell<Node<K, V>>>>,
+    map: HashMap<K, Arc<Mutex<Node<K, V>>>>,
+    head: Option<Arc<Mutex<Node<K, V>>>>,
+    tail: Option<Arc<Mutex<Node<K, V>>>>,
     capacity: usize,
     size: usize,
 }
@@ -15,8 +14,8 @@ pub struct LruCache<K, V> {
 struct Node<K, V> {
     key: K,
     value: V,
-    prev: Option<Rc<RefCell<Node<K, V>>>>,
-    next: Option<Rc<RefCell<Node<K, V>>>>,
+    prev: Option<Arc<Mutex<Node<K, V>>>>,
+    next: Option<Arc<Mutex<Node<K, V>>>>,
 }
 
 impl<K: std::hash::Hash + Eq + Clone, V: Clone> LruCache<K, V> {
@@ -35,12 +34,12 @@ impl<K: std::hash::Hash + Eq + Clone, V: Clone> LruCache<K, V> {
     pub fn insert(&mut self, key: K, value: V) {
         if let Some(node) = self.map.remove(&key) {
             // Key exists, update value and move node to the front
-            node.borrow_mut().value = value;
+            node.lock().unwrap().value = value;
             self.move_to_front(node.clone());
             self.map.insert(key, node);
         } else {
             // Key does not exist, create a new node
-            let new_node = Rc::new(RefCell::new(Node {
+            let new_node = Arc::new(Mutex::new(Node {
                 key: key.clone(),
                 value,
                 prev: None,
@@ -64,7 +63,7 @@ impl<K: std::hash::Hash + Eq + Clone, V: Clone> LruCache<K, V> {
     pub fn get(&mut self, key: &K) -> Option<V> {
         if let Some(node) = self.map.remove(key) {
             self.move_to_front(node.clone());
-            let value = node.borrow().value.clone(); // Clone the value
+            let value = node.lock().unwrap().value.clone(); // Clone the value
             self.map.insert(key.clone(), node); // Reinsert node
             Some(value)
         } else {
@@ -77,9 +76,9 @@ impl<K: std::hash::Hash + Eq + Clone, V: Clone> LruCache<K, V> {
         if let Some(node) = self.map.remove(key) {
             self.unlink(node.clone());
             self.size -= 1;
-            // Handle the case where Rc::try_unwrap fails
-            match Rc::try_unwrap(node) {
-                Ok(inner) => Some(inner.into_inner().value),
+            // Safely extract the value
+            match Arc::try_unwrap(node) {
+                Ok(inner) => Some(inner.into_inner().unwrap().value),
                 Err(_) => None,
             }
         } else {
@@ -88,38 +87,44 @@ impl<K: std::hash::Hash + Eq + Clone, V: Clone> LruCache<K, V> {
     }
 
     /// Add a node to the front of the doubly linked list.
-    fn add_to_front(&mut self, node: Rc<RefCell<Node<K, V>>>) {
-        node.borrow_mut().next = self.head.clone();
-        node.borrow_mut().prev = None;
-
+    fn add_to_front(&mut self, node: Arc<Mutex<Node<K, V>>>) {
+        {
+            let mut node_lock = node.lock().unwrap();
+            node_lock.next = self.head.clone();
+            node_lock.prev = None;
+        } // `node_lock` is dropped here
+    
         if let Some(ref head) = self.head {
-            head.borrow_mut().prev = Some(node.clone());
+            let mut head_lock = head.lock().unwrap();
+            head_lock.prev = Some(node.clone());
         } else {
             self.tail = Some(node.clone());
         }
-
+    
         self.head = Some(node);
     }
+    
 
     /// Move an existing node to the front of the list.
-    fn move_to_front(&mut self, node: Rc<RefCell<Node<K, V>>>) {
+    fn move_to_front(&mut self, node: Arc<Mutex<Node<K, V>>>) {
         self.unlink(node.clone());
         self.add_to_front(node);
     }
 
     /// Unlink a node from the doubly linked list.
-    fn unlink(&mut self, node: Rc<RefCell<Node<K, V>>>) {
-        let prev = node.borrow_mut().prev.take();
-        let next = node.borrow_mut().next.take();
+    fn unlink(&mut self, node: Arc<Mutex<Node<K, V>>>) {
+        let mut node_lock = node.lock().unwrap();
+        let prev = node_lock.prev.take();
+        let next = node_lock.next.take();
 
         if let Some(ref prev_node) = prev {
-            prev_node.borrow_mut().next = next.clone();
+            prev_node.lock().unwrap().next = next.clone();
         } else {
             self.head = next.clone();
         }
 
         if let Some(ref next_node) = next {
-            next_node.borrow_mut().prev = prev.clone();
+            next_node.lock().unwrap().prev = prev.clone();
         } else {
             self.tail = prev.clone();
         }
@@ -128,7 +133,7 @@ impl<K: std::hash::Hash + Eq + Clone, V: Clone> LruCache<K, V> {
     /// Evict the least recently used item.
     fn evict(&mut self) {
         if let Some(tail_node) = self.tail.take() {
-            let key_to_remove = tail_node.borrow().key.clone();
+            let key_to_remove = tail_node.lock().unwrap().key.clone();
             self.remove(&key_to_remove);
         }
     }

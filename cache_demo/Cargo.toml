@@ -6,3 +6,5 @@ edition = "2021"
 [dependencies]
 cache_macro = { path = "../cache_macro" } # Adjust the path to the macro crate
 lazy_static = "1.4.0"
+cacheForge = { path = "../cacheForge"}
+tokio = { version = "1", features = ["full"] }

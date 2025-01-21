@@ -2,5 +2,9 @@
 name = "memory_box"
 version = "0.1.0"
 edition = "2021"
+authors = ["Samba Kolliboina"]
+license = "MIT"
+description = "A Memory Data Structure"
 
 [dependencies]
+tokio = { version = "1", features = ["full"] }
